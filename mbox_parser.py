@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from email.parser import HeaderParser
 from email.header import decode_header
+from dateutil import parser as dparser
 
 class color:
     red = '\033[91m'
@@ -41,11 +42,11 @@ def writeHTMLHeader(target):
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Bootstrap demo</title>
-        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../../../css/bootstrap.min.css" rel="stylesheet">
     </head>
     <body class="bg-secondary">
-        <script src="../js/jquery-3.2.1.slim.min.js"></script>
-        <script src="../js/bootstrap.min.js"></script>
+        <script src="../../../js/jquery-3.2.1.slim.min.js"></script>
+        <script src="../../../js/bootstrap.min.js"></script>
 	    <center>
             <div class="container-fluid vw-75 p-3 vh-100">
                 <div class="h-70 w-75 card card-body align-items-center">
@@ -84,14 +85,7 @@ def writeHTMLFooter(target):
     open(target, "a", encoding="utf-8").write(footer)
 
 
-def writeToIndex(href, path, counter):
-    target = f"{path}/{href}"
-    counter = str(0) * (6-(len(str(counter)))) + str(counter)
-    print(f"{counter}")
-    open(index-test.html, "a").write('				<button type="button" class="btn btn-primary" data-toggle="modal" data-target="#exampleModalLong' + counter + '">' + counter + ' - A</button><br/>')
-
-
-def writeMessageFile(msg_counter, date, sender='', recipient='', copy_to='', reply_to='', subject='', body='', headers='', attachments=False):
+def writeMessageFile(target, msg_counter, date, sender='', recipient='', copy_to='', reply_to='', subject='', body='', headers='', attachments=False):
     message_content = '''<!doctype html>
     <html lang="en">
       <head>
@@ -105,9 +99,9 @@ def writeMessageFile(msg_counter, date, sender='', recipient='', copy_to='', rep
       </head>
       <body>
         <pre>'''
-    message_content += 'Date: ' + date + '</br>Sender: ' + sender + '</br>Recipient: ' + recipient \
-    + 'Copy To: ' + copy_to + '</br>Reply To: ' + reply_to + '</br>Subject: ' + subject + '</br></br>' \
-    + body + '</br></br>'
+    message_content += 'Date: ' + str(date) + '</br>Sender: ' + str(sender) + '</br>Recipient: ' + str(recipient) \
+    + '</br>Copy To: ' + str(copy_to) + '</br>Reply To: ' + str(reply_to) + '</br>Subject: ' + str(subject) + '</br></br>' \
+    + str(body) + '</br></br>'
     message_content += '''					</pre>
 					<div>'''
 
@@ -121,20 +115,14 @@ def writeMessageFile(msg_counter, date, sender='', recipient='', copy_to='', rep
                         </button>
     					<div id="headers" style="display: none">'''
     for header in headers:
-        message_content += header
+        message_content += re.sub("\n", "</br>", header)
     message_content += '''</div>
                            </body>
                        </html>'''
+    os.makedirs(os.path.dirname(target + '/html/'), exist_ok=True)
+    open(target + 'html/message_' + msg_counter + '.html', "w", encoding="utf-8").write(message_content)
 
-    open('html/message_' + msg_counter + '.html', "w", encoding="utf-8").write(message_content)
     
-
-def writeToHTML(href, path, content):
-    target = f"{path}/{href}"
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    open(target, "wb").write(content)
-
-
 def decodeSingleField(field):
     decoded = ''
     if field:
@@ -183,11 +171,11 @@ def printToTerminal(date_p=False, from_p=False, recipient_p=False, copy_to_p=Fal
     print (f"{color.blu}|    |{color.rst}")
 
 
-def saveToFile(filetype=False, output=False, data=False, date=False, sender=False, recipient=False, copy_to=False, reply_to=False, subject=False, headers=False, body=False, attachment=False):
+def saveToFile(target, filetype=False, output=False, data=False, date=False, sender=False, recipient=False, copy_to=False, reply_to=False, subject=False, headers=False, body=False, attachment=False):
     if filetype:
         if output:
             if filetype == 'txt':
-                filename = f"txt_files/{output}.txt"
+                filename = f"{target}/txt_files/{output}.txt"
                 print (f"{color.blu}|    |{color.rst}")
                 print (f"{color.blu}|    |-----> {color.synth_pin}Saving message to: {color.yel}{output}.txt{color.rst}")
                 os.makedirs(os.path.dirname(filename), exist_ok=True)
@@ -213,9 +201,10 @@ def saveToFile(filetype=False, output=False, data=False, date=False, sender=Fals
                         outfile.write('\n\n\n----------- HEADERS -----------\n')
                         outfile.write(headers)
             elif filetype == 'json':
-                filename = f"{output}"
+                filename = f"{target}/json/{output}"
                 print (f"{color.blu}|    |{color.rst}")
                 print (f"{color.blu}|    |-----> {color.synth_pin}Saving message to: {color.yel}{output}{color.rst}")
+                os.makedirs(os.path.dirname(filename), exist_ok=True)
                 with open(filename, "w") as outfile:
                     outfile.write(json.dumps(data))
         else:
@@ -300,6 +289,9 @@ if __name__ == '__main__':
                 box = mbox(mbox_file, factory=None, create=False)
                 mail_keys = box.keys()
                 mail_count = len(mail_keys)
+                chars_replace = ["\\", "/", "\:", "*", "?", "\"", "<", ">", "|", " "]
+                chars_pattern = '[' + re.escape("".join(chars_replace)) + ']'
+                output_dir = re.sub(" ", '_', mbox_file)
                 
                 ##Save to dict for later processing
                 box_content = { 'name': Path(mbox_file).name, 'count': mail_count, 'messages': {} }
@@ -357,8 +349,7 @@ if __name__ == '__main__':
                             print (f"{color.blu}|      '--> {color.red}The message is malformed, skipping.{color.rst}")
                             
                         if mail:
-                            date_format = "%a, %d %b %Y %H:%M:%S %z"
-                            temp_stamp = datetime.strptime(date, date_format)
+                            temp_stamp = dparser.parse(date)       
                             file_stamp = temp_stamp.strftime("%d%m%Y%H%M%S")
                             attachment_counter = 0
                                                         
@@ -369,7 +360,7 @@ if __name__ == '__main__':
                             ##Create the HTML content
                             if args.html:
                                 if counter == 0:
-                                    writeHTMLHeader("html/index-test.html")
+                                    writeHTMLHeader('output/' + output_dir +'/html/index.html')
                                 msg_counter = str(0) * (6-(len(str(counter)))) + str(counter)
                                 
                                 html_buttons.append('<button type="button" class="btn btn-primary text-start" data-toggle="modal" data-target="#exampleModalLong' \
@@ -396,15 +387,21 @@ if __name__ == '__main__':
                                 
                             ##Get the attachments
                             if 1 == 1:
+                                html_attachments.clear()
                                 for part in mail.walk():
                                     content_type = part.get_content_type()
                                     content_disposition = str(part.get("Content-Disposition"))
-                                    try:
+                                    if 1==1:
                                         ##Get the mail body
-                                        body = part.get_payload(decode=True).decode()
-                                        if not body:
-                                            body = part.get_content()                                        
-                                        
+                                        if part.get_payload(decode=True) is None:
+                                            body = part.get_payload(decode=True)
+                                        else:
+                                            try:
+                                                body = part.get_payload(decode=True).decode()
+                                            #If the body can't be parsed with utf-8, it's usually empty and only has a PDF attachment
+                                            except UnicodeDecodeError:
+                                                body = ''                                            
+
                                         box_content['messages'][counter] = { 'date': date, 
                                                                      'sender': sender, 
                                                                      'recipient': recipient, 
@@ -419,82 +416,80 @@ if __name__ == '__main__':
                                             body_term = re.sub(r'\n', f"\n{color.blu}|    |                {color.gre}", f"{color.blu}|    |                {color.gre}{body}")
                                             print (f"{body_term}{color.rst}")
                                             print (f"{color.blu}|    |{color.rst}")
-                                    except Exception as err:
-                                        pass    
-                                    
-                                    html_attachments.clear()                                    
-                                    ##Get PNGs and JPGs
-                                    if (content_type == "image/png" or content_type == "image/jpeg"):
-                                        attachment_name = part.get_filename()
-                                        if attachment_name:
-                                            output_name = file_stamp + '-' + attachment_name
-                                            if args.noattachments:
-                                                print (f"{color.blu}|    |                {color.synth_pin}Saving: {color.rst}{file_stamp}-{attachment_name}")
-                                                os.makedirs(os.path.dirname('attachments/' + output_name), exist_ok=True)
-                                                open('attachments/' + output_name, "wb").write(part.get_payload(decode=True))
-                                                box_content['messages'][counter]['attachment_output'][attachment_counter] = output_name
-                                                if args.html:
-                                                    print(output_name)
-                                                    html_attachments.append(output_name)
-                                            else:
-                                                print (f"{color.blu}|    |                {color.synth_pin}Attachment: {color.rst}{attachment_name}")
-                                                box_content['messages'][counter]['attachment_output'][attachment_counter] = 'not-saved'
-                                            box_content['messages'][counter]['attachment'][attachment_counter] = attachment_name
-                                            attachment_counter += 1
+                                                                        
+                                        ##Get PNGs and JPGs
+                                        if (content_type == "image/png" or content_type == "image/jpeg"):
+                                            attachment_name = part.get_filename()
+                                            if attachment_name:
+                                                output_name = file_stamp + '-' + re.sub("[\\/:*?\"<>| ]", '_', attachment_name)
+                                                if args.noattachments:
+                                                    print (f"{color.blu}|    |                {color.synth_pin}Saving: {color.rst}{output_name}")
+                                                    os.makedirs(os.path.dirname('output/' + output_dir + '/attachments/' + output_name), exist_ok=True)
+                                                    open('output/' + output_dir + '/attachments/' + output_name, "wb").write(part.get_payload(decode=True))
+                                                    box_content['messages'][counter]['attachment_output'][attachment_counter] = output_name
+                                                    if args.html:
+                                                        html_attachments.append(output_name)
+                                                else:
+                                                    print (f"{color.blu}|    |                {color.synth_pin}Attachment: {color.rst}{attachment_name}")
+                                                    box_content['messages'][counter]['attachment_output'][attachment_counter] = 'not-saved'
+                                                box_content['messages'][counter]['attachment'][attachment_counter] = attachment_name
+                                                attachment_counter += 1
 
-                                    ##Get other attachments
-                                    elif "attachment" in content_disposition:
-                                        attachment_name = part.get_filename()
-                                        if attachment_name:
-                                            output_name = file_stamp + '-' + attachment_name
-                                            if args.noattachments:
-                                                print (f"{color.blu}|    |                {color.synth_pin}Saving: {color.rst}{file_stamp}-{attachment_name}")
-                                                os.makedirs(os.path.dirname('attachments/' + output_name), exist_ok=True)
-                                                open('attachments/' + output_name, "wb").write(part.get_payload(decode=True))
-                                                box_content['messages'][counter]['attachment_output'][attachment_counter] = output_name
-                                                if args.html:
-                                                    html_attachments.append(output_name)
-                                            else:
-                                                print (f"{color.blu}|    |                {color.synth_pin}Attachment: {color.rst}{attachment_name}")
-                                                box_content['messages'][counter]['attachment_output'][attachment_counter] = 'not-saved'
-                                            box_content['messages'][counter]['attachment'][attachment_counter] = attachment_name
-                                            attachment_counter += 1
+                                        ##Get other attachments
+                                        elif "attachment" in content_disposition:
+                                            attachment_name = part.get_filename()
+                                            if attachment_name:
+                                                output_name = file_stamp + '-' + re.sub("[\\/:*?\"<>| ]", '_', attachment_name)
+                                                if args.noattachments:
+                                                    print (f"{color.blu}|    |                {color.synth_pin}Saving: {color.rst}{output_name}")
+                                                    os.makedirs(os.path.dirname('output/' + output_dir + '/attachments/' + output_name), exist_ok=True)
+                                                    open('output/' + output_dir + '/attachments/' + output_name, "wb").write(part.get_payload(decode=True))
+                                                    box_content['messages'][counter]['attachment_output'][attachment_counter] = output_name
+                                                    if args.html:
+                                                        html_attachments.append(output_name)
+                                                else:
+                                                    print (f"{color.blu}|    |                {color.synth_pin}Attachment: {color.rst}{attachment_name}")
+                                                    box_content['messages'][counter]['attachment_output'][attachment_counter] = 'not-saved'
+                                                box_content['messages'][counter]['attachment'][attachment_counter] = attachment_name
+                                                attachment_counter += 1
                                     
-                                    if args.html:
-                                        if args.noattachments:
-                                            if len(html_attachments) > 0:
-                                                writeMessageFile(msg_counter, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, body, headers_decoded, html_attachments)
-                                            else:
-                                                writeMessageFile(msg_counter, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, body, headers_decoded)
+                                if args.html:
+                                    if args.noattachments:
+                                        if len(html_attachments) > 0:
+                                            writeMessageFile('output/' + output_dir + '/', msg_counter, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, body, headers_decoded, html_attachments)
                                         else:
-                                            writeMessageFile(msg_counter, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, body, headers_decoded)
+                                            writeMessageFile('output/' + output_dir + '/', msg_counter, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, body, headers_decoded)
+                                    else:
+                                        writeMessageFile('output/' + output_dir + '/', msg_counter, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, body, headers_decoded)
+                                    except Exception as err:
+                                        print(err)
+                                        pass        
                                 
                                 ##If the user chose to save mails to text files
                                 if args.txt:
                                     if attachment_counter > 0:
-                                        saveToFile('txt', file_stamp, False, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, headers_decoded, body, box_content['messages'][counter]['attachment'])
+                                        saveToFile('output/' + output_dir + '/', 'txt', file_stamp, False, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, headers_decoded, body, box_content['messages'][counter]['attachment'])
                                     else:
-                                        saveToFile('txt', file_stamp, False, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, headers_decoded, body)
+                                        saveToFile('output/' + output_dir + '/', 'txt', file_stamp, False, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, headers_decoded, body)
     
                                 counter += 1
                                 print (f"{color.blu}|    |{color.rst}")
-                        sleep(0.5)
+                        sleep(0.1)
                     if args.json:
-                    #print (json.dumps(box_content, indent=4))
-                        saveToFile('json', 'mailbox.json', box_content)
+                        saveToFile('output/' + output_dir + '/', 'json', 'mailbox.json', box_content)
                     elif args.html:
                         for button in html_buttons:
-                            writeToIndexFile("html/index-test.html", button)
-                        writeToIndexFile("html/index-test.html", '		<!-- Modal -->')
+                            writeToIndexFile('output/' + output_dir + '/html/index.html', button)
+                        writeToIndexFile('output/' + output_dir + '/html/index.html', '		<!-- Modal -->')
                         for modal in html_modals:
-                            writeToIndexFile("html/index-test.html", modal)
-                        writeHTMLFooter("html/index-test.html")
+                            writeToIndexFile('output/' + output_dir + '/html/index.html', modal)
+                        writeHTMLFooter('output/' + output_dir + '/html/index.html')
                         
                     print (f"{color.blu}'----'----------------> {color.gre}[ DONE ]{color.rst}")
                 else:
                     sys.exit (f"{color.blu}'--> {color.red}Mailbox empty or not a compatible mbox type!{color.rst}\n")
         else:
-            sys.exit (f"{color.red}File {mbox_file} not found!\n{color.yel}Remember to define full path if not located in the same folder with the script!{color.rst}\n")
+            sys.exit (f"{color.red}File {color.yel}{mbox_file}{color.red} not found!\n{color.yel}Remember to define full path if not located in the same folder with the script!{color.rst}\n")
     except KeyboardInterrupt:
         sys.exit (f"{color.yel}User interrupted{color.rst}\n")
     except Exception as err:
