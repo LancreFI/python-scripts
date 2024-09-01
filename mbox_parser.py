@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from email.parser import HeaderParser
 from email.header import decode_header
+from bs4 import BeautifulSoup
 from dateutil import parser as dparser
 
 class color:
@@ -21,14 +22,6 @@ class color:
     synth_pur = '\033[38;5;128m'
     synth_blu = '\033[38;5;56m'
     synth_cya = '\033[38;5;49m'
-
-
-def getMails(mailbox, key):
-    try:
-        mail = mailbox[key]
-        return mail['date'], mail['from'], mail['to'], mail['reply-to'], mail['subject'], mail['x-attached'], mail.is_multipart(), mail
-    except email.errors.MessageParseError as err:
-        return False
 
    
 def writeToIndexFile(target, html_content):
@@ -179,7 +172,7 @@ def saveToFile(target, filetype=False, output=False, data=False, date=False, sen
                 print (f"{color.blu}|    |{color.rst}")
                 print (f"{color.blu}|    |-----> {color.synth_pin}Saving message to: {color.yel}{output}.txt{color.rst}")
                 os.makedirs(os.path.dirname(filename), exist_ok=True)
-                with open(filename, "w") as outfile:
+                with open(filename, "w", encoding="utf-8") as outfile:
                     if date:
                         outfile.write(f"Date: {date} \n")
                     if sender:
@@ -349,7 +342,8 @@ if __name__ == '__main__':
                             print (f"{color.blu}|      '--> {color.red}The message is malformed, skipping.{color.rst}")
                             
                         if mail:
-                            temp_stamp = dparser.parse(date)       
+                            temp_stamp = dparser.parse(date)
+                                        
                             file_stamp = temp_stamp.strftime("%d%m%Y%H%M%S")
                             attachment_counter = 0
                                                         
@@ -369,7 +363,7 @@ if __name__ == '__main__':
                                 modal_content += '''                 <div class="modal-dialog mw-100 w-50 h-100" role="document"> 
                                                     <div class="modal-content h-75"> 
                                                     <div class="modal-header"> 
-                                                    <h5 class="modal-title" id="exampleModalLongTitle">Modal title &nbsp;</h5>
+                                                    <h5 class="modal-title" id="exampleModalLongTitle">''' + subject_decoded + ''' &nbsp; &nbsp; &nbsp; </h5>
                                                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                                                     <span aria-hidden="true">&times;</span>
                                                     </button>
@@ -385,23 +379,29 @@ if __name__ == '__main__':
                                                     </div>'''                                
                                 html_modals.append(modal_content)
                                 
-                            ##Get the attachments
+                            ##Get attachments and build box_content
                             if 1 == 1:
                                 html_attachments.clear()
+                                content_type = ''
+                                body = ''
                                 for part in mail.walk():
+                                    previous_content_type = content_type
                                     content_type = part.get_content_type()
                                     content_disposition = str(part.get("Content-Disposition"))
                                     if 1==1:
-                                        ##Get the mail body
-                                        if part.get_payload(decode=True) is None:
-                                            body = part.get_payload(decode=True)
-                                        else:
+                                        if content_type == "text/plain":
                                             try:
                                                 body = part.get_payload(decode=True).decode()
-                                            #If the body can't be parsed with utf-8, it's usually empty and only has a PDF attachment
                                             except UnicodeDecodeError:
-                                                body = ''                                            
-
+                                                body = part.get_payload(decode=True).decode('latin-1')
+                                                body = BeautifulSoup(body, features="html.parser").get_text()
+                                        elif ((previous_content_type != "text/plain") and (content_type == "text/html")):
+                                            try:
+                                                body = BeautifulSoup(part.get_payload(decode=True).decode(), features="html.parser").get_text()
+                                            except UnicodeDecodeError:
+                                                body = part.get_payload(decode=True).decode('latin-1')
+                                                body = BeautifulSoup(body, features="html.parser").get_text()
+                                            
                                         box_content['messages'][counter] = { 'date': date, 
                                                                      'sender': sender, 
                                                                      'recipient': recipient, 
@@ -421,7 +421,7 @@ if __name__ == '__main__':
                                         if (content_type == "image/png" or content_type == "image/jpeg"):
                                             attachment_name = part.get_filename()
                                             if attachment_name:
-                                                output_name = file_stamp + '-' + re.sub("[\\/:*?\"<>| ]", '_', attachment_name)
+                                                output_name = file_stamp + '-' + re.sub("\\r", "_", re.sub("\\t", "_", re.sub("\\n", "_", re.sub("[\\/:*?\"<>| ]", '_', attachment_name))))
                                                 if args.noattachments:
                                                     print (f"{color.blu}|    |                {color.synth_pin}Saving: {color.rst}{output_name}")
                                                     os.makedirs(os.path.dirname('output/' + output_dir + '/attachments/' + output_name), exist_ok=True)
@@ -439,7 +439,7 @@ if __name__ == '__main__':
                                         elif "attachment" in content_disposition:
                                             attachment_name = part.get_filename()
                                             if attachment_name:
-                                                output_name = file_stamp + '-' + re.sub("[\\/:*?\"<>| ]", '_', attachment_name)
+                                                output_name = file_stamp + '-' + re.sub("\\r", "_", re.sub("\\t", "_", re.sub("\\n", "_", re.sub("[\\/:*?\"<>| ]", '_', attachment_name))))
                                                 if args.noattachments:
                                                     print (f"{color.blu}|    |                {color.synth_pin}Saving: {color.rst}{output_name}")
                                                     os.makedirs(os.path.dirname('output/' + output_dir + '/attachments/' + output_name), exist_ok=True)
@@ -452,7 +452,7 @@ if __name__ == '__main__':
                                                     box_content['messages'][counter]['attachment_output'][attachment_counter] = 'not-saved'
                                                 box_content['messages'][counter]['attachment'][attachment_counter] = attachment_name
                                                 attachment_counter += 1
-                                    
+                                
                                 if args.html:
                                     if args.noattachments:
                                         if len(html_attachments) > 0:
@@ -460,10 +460,7 @@ if __name__ == '__main__':
                                         else:
                                             writeMessageFile('output/' + output_dir + '/', msg_counter, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, body, headers_decoded)
                                     else:
-                                        writeMessageFile('output/' + output_dir + '/', msg_counter, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, body, headers_decoded)
-                                    except Exception as err:
-                                        print(err)
-                                        pass        
+                                        writeMessageFile('output/' + output_dir + '/', msg_counter, date, sender_decoded, recipient_decoded, copy_to_decoded, reply_to_decoded, subject_decoded, body, headers_decoded)        
                                 
                                 ##If the user chose to save mails to text files
                                 if args.txt:
@@ -477,7 +474,8 @@ if __name__ == '__main__':
                         sleep(0.1)
                     if args.json:
                         saveToFile('output/' + output_dir + '/', 'json', 'mailbox.json', box_content)
-                    elif args.html:
+                    
+                    if args.html:
                         for button in html_buttons:
                             writeToIndexFile('output/' + output_dir + '/html/index.html', button)
                         writeToIndexFile('output/' + output_dir + '/html/index.html', '		<!-- Modal -->')
