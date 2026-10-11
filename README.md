@@ -1,4 +1,12 @@
-#mbox-parser.py</br>
+# collect_ms_data.py</br>
+  Vibe coded collector for MS CVE data, output directly ingestable by Grafana tables.</br>
+  Have not done any thorouhg testing, use at you own discression.</br>
+  </br>
+# collect_oracle_data.py</br>
+  Vibe coded collector for Oracle CVE data, output directly ingestable by Grafana tables.</br>
+  Not thoroughly tested either, also produces a lot of unnecessary data I didn't find the interest in cleaning up.</br>
+</br>
+# mbox-parser.py</br>
   Just an awful mess atm. Something I whipped up while doing some investigation into mbox content and needed someting to parse them with, without using an actual client.</br>
 </br>
   The HTML-exctract depends on:</br>
